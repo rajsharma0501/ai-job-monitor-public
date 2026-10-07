@@ -1,0 +1,75 @@
+# Backups of the ignored config — the base .gitignore rule misses these,
+# and they carry the full company list and filter criteria.
+config.json.*
+*.bak
+
+# Job-search data. history.json and jobs.db hold every matched job ever
+# found; job_state.json holds dedup state. None belong on a remote.
+history.json
+jobs.db
+job_state.json
+.slug_db_cache/
+
+# Local agent config
+.codex/
+.venv/
+.pytest_cache/
+.claude/settings.local.json
+jobs.db-*
+history.json.*
+job_state.json.*
+
+# Secrets and state - NEVER commit these
+job_state.json
+config.json
+*.log
+logs/
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Keep template only
+!config.template.json
+
+
+.test-deps/
+
+test-results.txt
+
+.verified-deps/

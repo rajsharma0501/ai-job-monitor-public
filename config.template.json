@@ -1,0 +1,35 @@
+{
+  "companies": [],
+  "location_filter": [],
+  "request_delay": 1.5,
+  "max_retries": 3,
+  "state_expiry_days": 90,
+  "max_job_age_days": 2,
+  "keywords": {
+    "seniority": [
+      "senior",
+      "staff",
+      "principal",
+      "lead"
+    ],
+    "domain": [
+      "machine learning",
+      "ml",
+      "mlops",
+      "llm",
+      "ai",
+      "agent",
+      "genai",
+      "member of technical staff"
+    ],
+    "role": [
+      "engineer",
+      "scientist",
+      "researcher"
+    ],
+    "exclude": [
+      "sales engineer",
+      "talent acquisition"
+    ]
+  }
+}

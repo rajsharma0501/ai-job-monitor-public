@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Monitor — Observability</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg:       #0F1318;
+    --bg2:      #171D27;
+    --surface:  #1A2030;
+    --surface2: #212840;
+    --border:   #2A3550;
+    --text:     #D8E0F0;
+    --muted:    #637089;
+    --accent:    #4A9EFF;
+    --accent-bg: #0D1F3C;
+    --high:     #3FB870;
+    --high-bg:  #0A2118;
+    --med:      #D49A20;
+    --med-bg:   #201800;
+    --low:      #F47070;
+    --low-bg:   #200808;
+    --ok:       #3FB870;
+    --warn:     #D49A20;
+    --err:      #F47070;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+    --r:        6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .page { max-width: 1100px; margin: 0 auto; padding: 0 20px 48px; }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .topbar-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .topbar-title span { color: var(--accent); }
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    border: 1px solid;
+  }
+  .pill-ok   { color: var(--ok);  border-color: var(--ok);  background: var(--high-bg); }
+  .pill-run  { color: var(--med); border-color: var(--med); background: var(--med-bg); }
+  .pill-err  { color: var(--err); border-color: var(--err); background: var(--low-bg); }
+  .pill-dot  { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill-dot.blink { animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: var(--r);
+    border: 1px solid;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .8; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+
+  .refresh-info {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── KPIs ── */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 700px) { .kpis { grid-template-columns: repeat(2,1fr); } }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 14px 16px;
+  }
+  .kpi-lbl {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .kpi-val {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .kpi-sub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .c-accent { color: var(--accent); }
+  .c-high   { color: var(--high); }
+  .c-med    { color: var(--med); }
+  .c-err    { color: var(--err); }
+  .c-muted  { color: var(--muted); }
+
+  /* ── Grid ── */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid3 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 750px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .card-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+  }
+  .card-badge {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 4px;
+  }
+
+  /* ── Run history chart ── */
+  .chart-area {
+    padding: 14px 16px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+  }
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .bar-seg {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    transition: height .3s ease;
+  }
+  .bar-seg-high { background: var(--high); }
+  .bar-seg-med  { background: var(--accent); }
+  .bar-seg-low  { background: var(--med); }
+  .bar-zero     { height: 3px; background: var(--border); border-radius: 2px; }
+  .bar-lbl {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    max-width: 100%;
+    text-align: center;
+  }
+  .chart-legend {
+    display: flex;
+    gap: 14px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+  /* ── Runs table ── */
+  .runs-table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th:not(:first-child) { text-align: right; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg2); }
+  tbody td { padding: 7px 12px; vertical-align: middle; }
+  tbody td:not(:first-child) {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ts-cell { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .phase-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+  .phase-name { flex:0 0 88px; font-size:12px; color:var(--muted); text-transform:capitalize; }
+  .phase-track { flex:1; height:14px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .phase-fill { height:100%; background:var(--accent); border-radius:3px; }
+  .phase-fill.dominant { background:var(--err); }
+  .phase-secs { flex:0 0 58px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
+  .slow-row { display:flex; justify-content:space-between; font-size:12px; padding:4px 0;
+              border-bottom:1px solid var(--border); }
+  .slow-row:last-child { border-bottom:none; }
+  .slow-name { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slow-secs { font-variant-numeric:tabular-nums; padding-left:10px; }
+  .timing-split { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:720px) { .timing-split { grid-template-columns:1fr; } }
+  .chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+  .chip-ok  { background: var(--high-bg); color: var(--high); }
+  .chip-err { background: var(--low-bg);  color: var(--err); }
+
+  /* ── Priority bars ── */
+  .pri-bars { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+  .pri-row {}
+  .pri-meta { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+  .pri-label { font-weight: 500; }
+  .pri-count { font-family: var(--mono); color: var(--muted); }
+  .track { height: 7px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 4px; }
+
+  /* ── Log tail ── */
+  .log-wrap {
+    padding: 12px 16px;
+    max-height: 280px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .log-wrap::-webkit-scrollbar { width: 4px; }
+  .log-wrap::-webkit-scrollbar-track { background: transparent; }
+  .log-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .log-line { display: block; white-space: pre-wrap; word-break: break-all; }
+  .log-warn  { color: var(--med); }
+  .log-err   { color: var(--err); }
+  .log-info  { color: var(--accent); }
+  .log-circuit { color: var(--err); font-weight: 600; }
+
+  /* ── Company Health tabs ── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .tab-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab-btn.tab-err.active { color: var(--err); border-bottom-color: var(--err); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .health-list { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+  .health-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .health-name { color: var(--text); }
+  .health-meta { color: var(--muted); font-size: 10.5px; }
+  .stale { color: var(--warn); }
+  .never { color: var(--err); }
+
+  /* ── Status bar for run ── */
+  .run-bar {
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .run-bar-label { color: var(--muted); }
+
+  /* ── Empty state ── */
+  .empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-title"><span>~/</span>ai-job-monitor</div>
+    <div style="display:flex;gap:6px;margin-right:8px;">
+      <a href="/" style="padding:4px 12px;border-radius:var(--r);border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:11px;text-decoration:none;background:var(--surface2)">📋 History</a>
+      <span style="padding:4px 12px;border-radius:var(--r);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;background:var(--accent-bg)">📡 Observability</span>
+    </div>
+    <div class="topbar-right">
+      <span id="status-pill" class="status-pill pill-ok"><span class="pill-dot"></span><span id="status-text">idle</span></span>
+      <button class="btn btn-ghost" onclick="refresh()">↻ Refresh</button>
+      <span class="refresh-info">auto in <span id="countdown">30</span>s</span>
+    </div>
+  </header>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi"><div class="kpi-lbl">Companies</div><div class="kpi-val c-accent" id="k-cos">—</div><div class="kpi-sub">monitored</div></div>
+    <div class="kpi"><div class="kpi-lbl">Jobs Tracked</div><div class="kpi-val" id="k-total">—</div><div class="kpi-sub">in state</div></div>
+    <div class="kpi"><div class="kpi-lbl">Last Duration</div><div class="kpi-val c-muted" id="k-dur">—</div><div class="kpi-sub">seconds</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total Runs</div><div class="kpi-val c-accent" id="k-runs">—</div><div class="kpi-sub">since first scan</div></div>
+  </div>
+
+  <!-- Run History -->
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">Run History</div>
+      <div class="card-badge" id="runs-badge">last 5 runs</div>
+    </div>
+    <div class="runs-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Dur</th><th>New Jobs</th><th>Errors</th><th>Circuits</th>
+          </tr>
+        </thead>
+        <tbody id="runs-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Where the time went -->
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">Where the Time Went</div>
+      <div class="card-badge" id="timing-badge">last run</div>
+    </div>
+    <div class="timing-split">
+      <div>
+        <div class="kpi-lbl" style="margin-bottom:9px">Phases</div>
+        <div id="phase-list"><div class="empty">No timing data yet</div></div>
+      </div>
+      <div>
+        <div class="kpi-lbl" style="margin-bottom:9px">Slowest boards</div>
+        <div id="slow-list"><div class="empty">No timing data yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Company Health -->
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">Company Health</div>
+      <div class="card-badge" id="health-badge">from last run</div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn tab-err active" id="tab-failed-btn" onclick="switchTab('failed')">✗ Failed <span id="failed-count"></span></button>
+      <button class="tab-btn" id="tab-passed-btn" onclick="switchTab('passed')">✓ Passed <span id="passed-count"></span></button>
+      <button class="tab-btn" id="tab-parked-btn" onclick="switchTab('parked')">⏸ Parked <span id="parked-count"></span></button>
+    </div>
+    <div class="tab-content active" id="tab-failed">
+      <div class="health-list" id="failed-list"><div class="empty">No data yet</div></div>
+    </div>
+    <div class="tab-content" id="tab-passed">
+      <div class="health-list" id="passed-list"><div class="empty">No data yet</div></div>
+    </div>
+    <div class="tab-content" id="tab-parked">
+      <div class="health-list" id="parked-list"><div class="empty">No data yet</div></div>
+    </div>
+  </div>
+
+  <!-- Log tail -->
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">Log Tail</div>
+      <div class="card-badge">last 5 runs</div>
+    </div>
+    <div class="log-wrap" id="log-wrap">
+      <span style="color:var(--muted);font-family:var(--mono);font-size:11px;">Loading…</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span id="footer-ts">—</span>
+    <span>localhost:8765/obs · <a href="/" style="color:var(--accent)">history dashboard →</a></span>
+  </div>
+
+</div>
+
+<script>
+  const BASE = '';  // same origin
+  let _countdown = 30;
+  let _timer;
+
+  /* ── Fetch all data ─────────────────────────────────────── */
+  async function refresh() {
+    clearInterval(_timer);
+    _countdown = 30;
+    document.getElementById('countdown').textContent = _countdown;
+
+    const [s, m, j, l] = await Promise.allSettled([
+      fetch(BASE + '/status').then(r => r.json()),
+      fetch(BASE + '/metrics').then(r => r.json()),
+      fetch(BASE + '/jobs').then(r => r.json()),
+      fetch(BASE + '/logfile').then(r => r.json()),
+    ]);
+
+    if (s.status === 'fulfilled') try { renderStatus(s.value);  } catch(e) { console.error('renderStatus', e); }
+    if (m.status === 'fulfilled') try { renderMetrics(m.value); } catch(e) { console.error('renderMetrics', e); }
+    if (j.status === 'fulfilled') try { renderJobs(j.value);    } catch(e) { console.error('renderJobs', e); }
+    if (l.status === 'fulfilled') try { renderLog(l.value);     } catch(e) { console.error('renderLog', e); }
+
+    document.getElementById('footer-ts').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+    startCountdown();
+  }
+
+  /* ── Countdown ──────────────────────────────────────────── */
+  function startCountdown() {
+    clearInterval(_timer);
+    _timer = setInterval(() => {
+      _countdown--;
+      document.getElementById('countdown').textContent = _countdown;
+      if (_countdown <= 0) refresh();
+    }, 1000);
+  }
+
+  /* ── Render: run status ─────────────────────────────────── */
+  function renderStatus(s) {
+    const pill = document.getElementById('status-pill');
+    const txt  = document.getElementById('status-text');
+    const dot  = pill.querySelector('.pill-dot');
+    pill.className = 'status-pill';
+    dot.className = 'pill-dot';
+    if (s.running) {
+      pill.classList.add('pill-run');
+      dot.classList.add('blink');
+      txt.textContent = 'running…';
+    } else if (s.ok === false) {
+      pill.classList.add('pill-err');
+      txt.textContent = 'last run failed';
+    } else {
+      pill.classList.add('pill-ok');
+      txt.textContent = s.last ? 'idle · ' + new Date(s.last).toLocaleTimeString() : 'never run';
+    }
+  }
+
+  /* ── Render: metrics (chart + runs table + circuit list) ── */
+  function renderMetrics(records) {
+    document.getElementById('k-runs').textContent = records.length || '0';
+
+    if (records.length === 0) return;
+
+    const last = records[records.length - 1];
+    document.getElementById('k-dur').textContent =
+      last.duration_s != null ? last.duration_s + 's' : '—';
+
+    const tbody = document.getElementById('runs-tbody');
+    tbody.innerHTML = '';
+    [...records].reverse().slice(0, 5).forEach(r => {
+      const circuits = (r.circuit_open || []).length;
+      const errs = r.companies_errored || 0;
+      tbody.innerHTML += `
+        <tr>
+          <td class="ts-cell">${(r.ts || '').replace('T', ' ')}</td>
+          <td>${r.duration_s != null ? r.duration_s + 's' : '—'}</td>
+          <td style="color:${r.new_jobs > 0 ? 'var(--high)' : 'var(--muted)'}">+${r.new_jobs || 0}</td>
+          <td>${errs > 0 ? `<span class="chip chip-err">${errs}</span>` : `<span class="chip chip-ok">0</span>`}</td>
+          <td style="color:${circuits > 0 ? 'var(--err)' : 'var(--muted)'}">${circuits}</td>
+        </tr>`;
+    });
+
+    renderTiming(last);
+
+    window._failedCompanies = last.failed_companies || [];
+    window._staleCompanies  = last.stale_companies  || [];
+    window._slugCheck       = last.slug_check       || {};
+    // Parked = deliberately not monitored. Disabled boards (no India pipeline)
+    // plus companies with no board on a supported ATS. Both come from config on
+    // every run, so this list cannot drift from what is actually being checked.
+    window._parkedCompanies = [
+      ...(last.disabled_companies   || []).map(c => ({...c, kind: 'disabled'})),
+      ...(last.unresolved_companies || []).map(c => ({...c, kind: 'no ATS'})),
+    ];
+    renderHealthTabs();
+  }
+
+  /* ── Where the time went ──────────────────────── */
+  function renderTiming(last) {
+    const phases = last.phases || {};
+    const slow   = last.slow_companies || [];
+    const names  = Object.keys(phases);
+
+    const phaseEl = document.getElementById('phase-list');
+    if (names.length === 0) {
+      phaseEl.innerHTML = '<div class="empty">No timing data yet — run the monitor once</div>';
+    } else {
+      // Scale bars against the widest phase, not against duration_s: the phases are
+      // wall-clock slices that overlap, so they do not sum to the run total.
+      const peak = Math.max(...names.map(n => phases[n]));
+      phaseEl.innerHTML = names.map(n => {
+        const secs = phases[n];
+        const pct  = peak > 0 ? Math.max((secs / peak) * 100, 1.5) : 1.5;
+        // Flag any phase that ate over half the run — that is what an anomaly looks like.
+        const hot  = last.duration_s > 0 && secs / last.duration_s > 0.5;
+        return `<div class="phase-row">
+            <div class="phase-name">${n.replace(/_/g, ' ')}</div>
+            <div class="phase-track"><div class="phase-fill${hot ? ' dominant' : ''}" style="width:${pct}%"></div></div>
+            <div class="phase-secs"${hot ? ' style="color:var(--err)"' : ''}>${secs}s</div>
+          </div>`;
+      }).join('');
+    }
+
+    const slowEl = document.getElementById('slow-list');
+    slowEl.innerHTML = slow.length === 0
+      ? '<div class="empty">No timing data yet</div>'
+      : slow.map(c => `<div class="slow-row">
+             <span class="slow-name">${c.company}</span>
+             <span class="slow-secs">${c.seconds}s</span>
+           </div>`).join('');
+
+    document.getElementById('timing-badge').textContent =
+      last.duration_s != null ? `last run · ${last.duration_s}s total` : 'last run';
+  }
+
+  /* ── Company Health tabs ─────────────────────────────────── */
+  window._parkedCompanies = [];
+  window._failedCompanies = [];
+  window._staleCompanies = [];
+  window._slugCheck = {};
+  window._byCompany = [];
+
+  function switchTab(tab) {
+    ['failed', 'passed', 'parked'].forEach(t => {
+      document.getElementById('tab-' + t).classList.toggle('active', tab === t);
+      document.getElementById('tab-' + t + '-btn').classList.toggle('active', tab === t);
+    });
+  }
+
+  /* Three different ways a company can be broken, shown together so a silently
+     empty board is as visible as one that returns an outright error. */
+  function collectIssues() {
+    const issues = new Map();   // company -> {company, tag, color, detail}
+    const add = (company, tag, color, detail) => {
+      if (!issues.has(company)) issues.set(company, { company, tag, color, detail });
+    };
+
+    (window._failedCompanies || []).forEach(f => add(
+      f.company,
+      f.error_type === '4xx' ? '404 wrong slug' : 'network error',
+      f.error_type === '4xx' ? 'var(--warn)' : 'var(--err)',
+      f.error || ''
+    ));
+
+    (window._slugCheck || {}).dead?.forEach(d => add(
+      d.company, 'dead board', 'var(--err)', d.url || ''
+    ));
+
+    (window._staleCompanies || []).forEach(sc => add(
+      sc.company,
+      `0 postings (was ${sc.previous})`,
+      'var(--warn)',
+      'Board fetched OK but returned nothing — its API may have changed'
+    ));
+
+    return [...issues.values()];
+  }
+
+  function renderHealthTabs() {
+    const issues = collectIssues();
+    const failedNames = new Set(issues.map(f => f.company));
+
+    // Badge
+    document.getElementById('health-badge').textContent =
+      issues.length ? `${issues.length} need attention` : 'all ok';
+    document.getElementById('failed-count').textContent = issues.length ? `(${issues.length})` : '';
+
+    // Failed tab
+    const failedEl = document.getElementById('failed-list');
+    if (issues.length === 0) {
+      const sc = window._slugCheck || {};
+      const when = sc.ts ? ` · slugs verified ${sc.ts.replace('T', ' ')}` : '';
+      failedEl.innerHTML = `<div style="padding:16px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--ok)">✓ No fetch errors last run${esc(when)}</div>`;
+    } else {
+      failedEl.innerHTML = issues.map(f => `
+        <div class="health-row" title="${esc(f.detail || '')}">
+          <span class="health-name">${esc(f.company)}</span>
+          <span style="color:${f.color};font-size:10.5px;">${esc(f.tag)}</span>
+        </div>`).join('');
+    }
+
+    // Parked tab — deliberately not monitored, so not a health problem.
+    const parked = window._parkedCompanies || [];
+    const parkedNames = new Set(parked.map(p => p.company));
+    document.getElementById('parked-count').textContent = parked.length ? `(${parked.length})` : '';
+    document.getElementById('parked-list').innerHTML = parked.length === 0
+      ? `<div class="empty">Nothing parked</div>`
+      : parked.map(p => `
+        <div class="health-row" title="${esc(p.reason || '')}">
+          <span class="health-name">${esc(p.company)}</span>
+          <span class="health-meta">${esc(p.kind)}</span>
+        </div>`).join('');
+
+    // Passed tab — all companies not failed and not parked, oldest/never first.
+    // Parked companies are excluded deliberately: a disabled board can never
+    // report a job, so leaving it here would show "last job: never" forever and
+    // read as a scraper failure rather than a choice.
+    const now = new Date();
+    const passed = (window._byCompany || [])
+      .filter(c => !failedNames.has(c.company) && !parkedNames.has(c.company))
+      .map(c => {
+        const ls = c.last_seen ? new Date(c.last_seen) : null;
+        const daysAgo = ls ? Math.floor((now - ls) / 86400000) : 99999;
+        return { ...c, daysAgo };
+      })
+      .sort((a, b) => b.daysAgo - a.daysAgo);
+
+    document.getElementById('passed-count').textContent = `(${passed.length})`;
+    const passedEl = document.getElementById('passed-list');
+    if (passed.length === 0) {
+      passedEl.innerHTML = `<div class="empty">No data</div>`;
+    } else {
+      passedEl.innerHTML = passed.map(c => {
+        let lbl, cls;
+        if (c.daysAgo === 99999) { lbl = 'never'; cls = 'never'; }
+        else if (c.daysAgo === 0) { lbl = 'today'; cls = ''; }
+        else if (c.daysAgo > 30)  { lbl = `${c.daysAgo}d ago`; cls = 'stale'; }
+        else                       { lbl = `${c.daysAgo}d ago`; cls = ''; }
+        return `<div class="health-row">
+          <span class="health-name">${esc(c.company)}</span>
+          <span class="health-meta ${cls}">last job: ${lbl}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  /* ── Render: jobs (KPIs + priority bars) ─────────────────── */
+  function renderJobs(j) {
+    window._byCompany = j.by_company || [];
+    renderHealthTabs();
+    document.getElementById('k-cos').textContent   = j.companies || '—';
+    document.getElementById('k-total').textContent = j.total     || '—';
+  }
+
+  /* ── Render: log tail ───────────────────────────────────── */
+  function renderLog(lines) {
+    const wrap = document.getElementById('log-wrap');
+    if (!lines || lines.length === 0) {
+      wrap.innerHTML = '<span style="color:var(--muted)">No log yet.</span>';
+      return;
+    }
+    wrap.innerHTML = lines.map(l => {
+      let cls = 'log-line';
+      if (l.includes('Circuit OPEN')) cls += ' log-circuit';
+      else if (l.includes('[WARNING]'))  cls += ' log-warn';
+      else if (l.includes('[ERROR]'))    cls += ' log-err';
+      else if (l.includes('[INFO]'))     cls += ' log-info';
+      return `<span class="${cls}">${esc(l)}</span>`;
+    }).join('\n');
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  /* ── Helpers ─────────────────────────────────────────────── */
+  function pct(n, total) { return Math.round((n / Math.max(1, total)) * 100); }
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── Boot ────────────────────────────────────────────────── */
+  refresh();
+</script>
+</body>
+</html>
